@@ -1,0 +1,21 @@
+model:
+  name: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract
+  max_length: 256
+
+data:
+  train_path: data/processed/train.csv
+  dev_path: data/processed/dev.csv
+  test_path: data/processed/test.csv
+  text_column: marked_text
+  label_column: relation_type
+
+training:
+  learning_rate: 2e-5
+  batch_size: 8
+  epochs: 5
+  weight_decay: 0.01
+  seed: 42
+  fp16: true
+
+output:
+  dir: results/pubmedbert_baseline
