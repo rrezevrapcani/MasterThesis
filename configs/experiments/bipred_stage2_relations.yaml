@@ -1,0 +1,21 @@
+model:
+  name: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract
+  max_length: 512
+
+data:
+  train_path: data/processed/two_stage/stage2_relation_types/train.csv
+  dev_path: data/processed/two_stage/stage2_relation_types/dev.csv
+  test_path: data/processed/two_stage/stage2_relation_types/test.csv
+  text_column: passage_text
+  label_column: relation_type
+
+training:
+  learning_rate: 1e-5
+  batch_size: 16
+  epochs: 10
+  weight_decay: 0.01
+  seed: 42
+  fp16: true
+
+output:
+  dir: results/stage2_relation_classification

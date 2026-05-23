@@ -1,0 +1,10 @@
+relation_type,filename,count,percentage
+No_Relation,No_Relation.csv,4178,50.0
+Association,Association.csv,2192,26.23264719961704
+Positive_Correlation,Positive_Correlation.csv,1089,13.03255146002872
+Negative_Correlation,Negative_Correlation.csv,763,9.131163235998086
+Bind,Bind.csv,61,0.730014360938248
+Cotreatment,Cotreatment.csv,31,0.3709909047391096
+Comparison,Comparison.csv,28,0.3350885591191958
+Drug_Interaction,Drug_Interaction.csv,11,0.13164193393968407
+Conversion,Conversion.csv,3,0.03590234561991383
