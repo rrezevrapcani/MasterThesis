@@ -1,6 +1,6 @@
 model:
   name: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract
-  max_length: 256
+  max_length: 512  
 
 data:
   train_path: data/processed/train.csv
@@ -8,14 +8,21 @@ data:
   test_path: data/processed/test.csv
   text_column: marked_text
   label_column: relation_type
+  no_relation_label: "No_Relation"
+  balance_negative_samples: false  # BioRED doesn't use balancing
+  max_neg_scale: 1.0
 
 training:
-  learning_rate: 2e-5
-  batch_size: 8
-  epochs: 5
+  learning_rate: 1e-5              
+  batch_size: 16                   
+  eval_batch_size: 32              
+  epochs: 10                        
   weight_decay: 0.01
   seed: 42
   fp16: true
+  eval_strategy: steps             
+  eval_steps: 100                  
+  save_steps: 100                  
 
 output:
-  dir: results/pubmedbert_baseline
+  dir: results/pubmedbert_baseline2
