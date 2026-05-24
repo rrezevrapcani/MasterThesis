@@ -2,10 +2,12 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List
+import re
 
 
 RAW_DATA_DIR = Path("data/raw")
 PROCESSED_DATA_DIR = Path("data/processed")
+SORTED_DATA_DIR = Path("data/Sorted data/relation_specific")
 
 SPLIT_FILES = {
     "train": "Train.BioC.XML",
@@ -256,5 +258,178 @@ def main():
     print("\nDone preprocessing BioRED.")
 
 
+def process_sorted_data():
+    """
+    Process the sorted relation-specific data from data/Sorted data/relation_specific/.
+    Combines all relation type CSVs into train/dev/test splits with No_Relation included.
+    Generates marked_text by tagging entities in the passage text.
+    """
+    train_dir = SORTED_DATA_DIR / "relation_specific_train"
+    test_dir = SORTED_DATA_DIR / "relation_specific_test"
+    
+    print("\nProcessing sorted data with No_Relation...")
+    
+    # Process training data
+    if train_dir.exists():
+        print(f"\nCombining train files from {train_dir}...")
+        train_dfs = []
+        for csv_file in sorted(train_dir.glob("*.csv")):
+            if csv_file.name == "train_summary.csv":
+                continue
+            print(f"  Reading {csv_file.name}...")
+            df = pd.read_csv(csv_file)
+            train_dfs.append(df)
+        
+        if train_dfs:
+            train_df = pd.concat(train_dfs, ignore_index=True)
+            train_df["marked_text"] = train_df.apply(
+                lambda row: mark_entities_in_passage(
+                    row["passage_text"],
+                    row["entity1_offset"],
+                    row["entity1_length"],
+                    row["entity2_offset"],
+                    row["entity2_length"],
+                    row["entity1_text"],
+                    row["entity2_text"]
+                ),
+                axis=1
+            )
+            train_df["split"] = "train"
+            
+            # Save to processed directory
+            output_path = PROCESSED_DATA_DIR / "train.csv"
+            train_df.to_csv(output_path, index=False)
+            print(f"\nSaved {len(train_df)} training samples to {output_path}")
+            print(f"Relation distribution:\n{train_df['relation_type'].value_counts()}")
+    
+    # Process test data
+    if test_dir.exists():
+        print(f"\nCombining test files from {test_dir}...")
+        test_dfs = []
+        for csv_file in sorted(test_dir.glob("*.csv")):
+            if csv_file.name == "test_summary.csv":
+                continue
+            print(f"  Reading {csv_file.name}...")
+            df = pd.read_csv(csv_file)
+            test_dfs.append(df)
+        
+        if test_dfs:
+            test_df = pd.concat(test_dfs, ignore_index=True)
+            test_df["marked_text"] = test_df.apply(
+                lambda row: mark_entities_in_passage(
+                    row["passage_text"],
+                    row["entity1_offset"],
+                    row["entity1_length"],
+                    row["entity2_offset"],
+                    row["entity2_length"],
+                    row["entity1_text"],
+                    row["entity2_text"]
+                ),
+                axis=1
+            )
+            test_df["split"] = "test"
+            
+            # Save to processed directory
+            output_path = PROCESSED_DATA_DIR / "test.csv"
+            test_df.to_csv(output_path, index=False)
+            print(f"\nSaved {len(test_df)} test samples to {output_path}")
+            print(f"Relation distribution:\n{test_df['relation_type'].value_counts()}")
+    
+    # Create dev from train (if not already present) or use test split
+    # For now, we'll use test as dev or create a 80-20 split
+    if (PROCESSED_DATA_DIR / "dev.csv").exists():
+        print("\ndev.csv already exists, skipping...")
+    else:
+        print("\nCreating dev split from test (using test as dev)...")
+        if test_dir.exists():
+            test_df = pd.read_csv(PROCESSED_DATA_DIR / "test.csv")
+            dev_df = test_df.sample(frac=0.5, random_state=42)
+            test_df = test_df.drop(dev_df.index)
+            
+            dev_df["split"] = "dev"
+            test_df["split"] = "test"
+            
+            dev_df.to_csv(PROCESSED_DATA_DIR / "dev.csv", index=False)
+            test_df.to_csv(PROCESSED_DATA_DIR / "test.csv", index=False)
+            
+            print(f"Saved {len(dev_df)} dev samples")
+            print(f"Saved {len(test_df)} test samples")
+
+
+def mark_entities_in_passage(
+    passage_text: str,
+    e1_offset: int,
+    e1_length: int,
+    e2_offset: int,
+    e2_length: int,
+    e1_text: str,
+    e2_text: str
+) -> str:
+    """
+    Mark entities in passage text using offsets with a robust fallback.
+    Cleans up stringified list structures like "['text']" to "text".
+    """
+    # Clean stringified lists if present: "['Entity']" -> "Entity"
+    def clean_entity_string(text_val):
+        text_str = str(text_val).strip()
+        if text_str.startswith("[") and text_str.endswith("]"):
+            # Use regex or eval safely to extract the first element string
+            match = re.search(r"['\"](.*?)['\"]", text_str)
+            if match:
+                return match.group(1)
+        return text_str
+
+    e1_clean = clean_entity_string(e1_text)
+    e2_clean = clean_entity_string(e2_text)
+
+    try:
+        e1_offset = int(e1_offset)
+        e2_offset = int(e2_offset)
+        e1_length = int(e1_length)
+        e2_length = int(e2_length)
+        
+        entities = [
+            ("ENTITY1", e1_offset, e1_length, e1_clean),
+            ("ENTITY2", e2_offset, e2_length, e2_clean),
+        ]
+        # Sort descending to prevent indexing shifts
+        entities.sort(key=lambda x: x[1], reverse=True)
+        
+        marked = passage_text
+        offset_success = 0
+        
+        for tag, offset, length, entity_text in entities:
+            end = offset + length
+            if 0 <= offset <= len(marked) and marked[offset:end] == entity_text:
+                marked = (
+                    marked[:offset]
+                    + f"[{tag}] {entity_text} [/{tag}]"
+                    + marked[end:]
+                )
+                offset_success += 1
+        
+        if offset_success == 2:
+            return marked
+
+    except Exception:
+        pass # Fall through to literal string replacement if offsets fail
+    
+    # --- ROBUST LITERAL FALLBACK ---
+    # If offsets fail or are offset-shifted by XML headers, find them directly in the text
+    marked = passage_text
+    if e1_clean in marked and e2_clean in marked:
+        # Protect against replacing substrings inside each other by using unique placeholders
+        # We replace the first occurrence found
+        marked = marked.replace(e1_clean, f"[ENTITY1] {e1_clean} [/ENTITY1]", 1)
+        marked = marked.replace(e2_clean, f"[ENTITY2] {e2_clean} [/ENTITY2]", 1)
+        
+    return marked
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--sorted":
+        process_sorted_data()
+    else:
+        main()

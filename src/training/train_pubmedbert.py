@@ -7,6 +7,9 @@ import yaml
 import pandas as pd
 import numpy as np
 
+import torch
+import torch.nn as nn
+
 from datasets import Dataset
 from sklearn.metrics import (
     accuracy_score,
@@ -137,6 +140,35 @@ def load_data(config):
     return train_df, dev_df, test_df, no_relation_label
 
 
+class WeightedLossTrainer(Trainer):
+    """
+    Custom Hugging Face Trainer that overrides compute_loss to inject class weights.
+    Balances minority and majority classes dynamically during CrossEntropy loss evaluation.
+    """
+    def __init__(self, class_weights=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if class_weights is not None:
+            # Sort weights by string name to exactly align with sorted(unique()) label IDs
+            sorted_weights = [class_weights[label] for label in sorted(class_weights.keys())]
+            self.class_weights = torch.tensor(sorted_weights, dtype=torch.float32)
+        else:
+            self.class_weights = None
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        labels = inputs.get("labels")
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        
+        if self.class_weights is not None:
+            weight_tensor = self.class_weights.to(logits.device)
+            loss_fct = nn.CrossEntropyLoss(weight=weight_tensor)
+        else:
+            loss_fct = nn.CrossEntropyLoss()
+            
+        loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+        return (loss, outputs) if return_outputs else loss
+
+
 def main():
     args = parse_args()
     config = load_config(args.config)
@@ -193,6 +225,10 @@ def main():
     logging.info("Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+    special_tokens_dict = {'additional_special_tokens': ['[ENTITY1]', '[/ENTITY1]', '[ENTITY2]', '[/ENTITY2]']}
+    num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
+    logging.info(f"Added {num_added_toks} new special tokens to the tokenizer.")
+
     def tokenize(batch):
         return tokenizer(
             batch[text_column],
@@ -229,6 +265,9 @@ def main():
         id2label=id2label,
         label2id=label2id,
     )
+
+    model.resize_token_embeddings(len(tokenizer))
+    logging.info(f"Resized model token embeddings to: {len(tokenizer)}")
 
     # Get no_relation label ID
     no_relation_id = label2id[no_relation_label]
@@ -301,13 +340,15 @@ def main():
         fp16=config["training"].get("fp16", True),
     )
 
-    trainer = Trainer(
+    # Replaced standard Trainer with our WeightedLossTrainer subclass
+    trainer = WeightedLossTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=dev_dataset,
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
+        class_weights=class_weights,
     )
 
     logging.info("Starting training...")
@@ -336,11 +377,13 @@ def main():
     # Also create a report excluding No_Relation
     positive_mask = y_true != no_relation_id
     positive_labels = [label for label in labels if label != no_relation_label]
-    
+    positive_ids = [label2id[label] for label in positive_labels] 
+
     if len(y_true[positive_mask]) > 0:
         report_without_no_relation = classification_report(
             y_true[positive_mask],
             y_pred[positive_mask],
+            labels=positive_ids,
             target_names=positive_labels,
             zero_division=0,
         )
