@@ -3,13 +3,13 @@ model:
   max_length: 512  
 
 data:
-  train_path: data/processed/train.csv
-  dev_path: data/processed/dev.csv
-  test_path: data/processed/test.csv
+  train_path: datasets/biored/processed/train_for_my_pipeline.csv
+  dev_path: datasets/biored/processed/dev_for_my_pipeline.csv
+  test_path: datasets/biored/processed/test_for_my_pipeline.csv
   text_column: marked_text
   label_column: relation_type
   no_relation_label: "No_Relation"
-  balance_negative_samples: false  # BioRED doesn't use balancing
+  balance_negative_samples: false
   max_neg_scale: 1.0
 
 training:
@@ -25,4 +25,4 @@ training:
   save_steps: 100                  
 
 output:
-  dir: results/pubmedbert_baseline2
+  dir: results/pubmedbert_hierarchical_biored

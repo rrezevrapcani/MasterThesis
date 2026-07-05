@@ -20,13 +20,13 @@ echo "========================================"
 cd "$SLURM_SUBMIT_DIR"
 
 mkdir -p logs
-mkdir -p results/pubmedbert_baseline
+mkdir -p results/pubmedbert_hierarchical_biored
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate env
 
 echo "Starting training..."
-python -m src.training.train_pubmedbert \
+python scripts/training/train_pubmedbert_hierarchical.py \
   --config configs/experiments/pubmedbert_baseline.yaml
 
 echo "========================================"
