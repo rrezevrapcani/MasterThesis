@@ -2,13 +2,20 @@
 #SBATCH --job-name=embedding_generation
 #SBATCH --output=logs/embedding_generation_%j.out
 #SBATCH --error=logs/embedding_generation_%j.err
-#SBATCH --time=04:00:00
+#SBATCH --time=12:00:00
 #SBATCH --partition=A40medium
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 
 set -euo pipefail
+
+echo "========================================"
+echo "Job started on $(date)"
+echo "Running on node: $(hostname)"
+echo "Current directory: $(pwd)"
+echo "SLURM job ID: $SLURM_JOB_ID"
+echo "========================================"
 
 REPO_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$REPO_DIR"
