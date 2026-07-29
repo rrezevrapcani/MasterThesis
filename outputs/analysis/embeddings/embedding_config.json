@@ -1,0 +1,16 @@
+{
+  "input_file": "datasets/biored/processed/train_for_my_pipeline.csv",
+  "output_dir": "outputs/analysis/embeddings",
+  "text_column": "marked_text",
+  "label_column": "relation_type",
+  "doc_id_column": "doc_id",
+  "entity1_id_column": "entity1_id",
+  "entity2_id_column": "entity2_id",
+  "entity1_type_column": "entity1_type",
+  "entity2_type_column": "entity2_type",
+  "entity_pair_type_column": "entity_pair_type",
+  "model_name": "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
+  "max_length": 512,
+  "batch_size": 32,
+  "pooling": "cls"
+}

@@ -1,0 +1,19 @@
+{
+  "number_of_rows": 22896,
+  "original_embedding_dimension": 768,
+  "pca_components": 50,
+  "standardize": false,
+  "explained_variance_ratio_first_component": 0.26771101355552673,
+  "cumulative_explained_variance_ratio": 0.8191491365432739,
+  "outputs": {
+    "pca_embeddings": "pca_embeddings.npy",
+    "pca_metadata": "pca_metadata.csv",
+    "explained_variance": "explained_variance.csv",
+    "explained_variance_plot": "explained_variance.png",
+    "cumulative_explained_variance_plot": "cumulative_explained_variance.png",
+    "scatter_plot": "pca_pc1_pc2_by_relation_type.png"
+  },
+  "preprocessing": {
+    "standardized": false
+  }
+}
