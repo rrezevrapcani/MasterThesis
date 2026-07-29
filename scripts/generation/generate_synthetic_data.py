@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 import pandas as pd
 import yaml
@@ -32,9 +37,11 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError(f"Missing required config value(s): {', '.join(missing)}")
 
     config["requested_number_of_abstracts"] = int(config["requested_number_of_abstracts"])
+    config["backend"] = str(config.get("backend", "vllm")).lower()
     config["temperature"] = float(config.get("temperature", 0.7))
     config["top_p"] = float(config.get("top_p", 0.9))
     config["max_tokens"] = int(config.get("max_tokens", 4096))
+    config["do_sample"] = bool(config.get("do_sample", True))
     config["seed"] = int(config.get("seed", 42))
     config["tensor_parallel_size"] = int(config.get("tensor_parallel_size", 1))
     config["gpu_memory_utilization"] = float(config.get("gpu_memory_utilization", 0.9))
@@ -47,6 +54,8 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError("max_tokens must be positive")
     if config["tensor_parallel_size"] <= 0:
         raise ValueError("tensor_parallel_size must be positive")
+    if config["backend"] not in {"vllm", "transformers"}:
+        raise ValueError("backend must be either 'vllm' or 'transformers'")
     return config
 
 
@@ -104,6 +113,91 @@ def generate_with_vllm(prompt: str, config: dict[str, Any]) -> list[dict[str, An
                 }
             )
     return records
+
+
+def generate_with_transformers(prompt: str, config: dict[str, Any]) -> list[dict[str, Any]]:
+    try:
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer, set_seed
+    except ImportError as exc:
+        raise ImportError(
+            "transformers and torch are required for backend='transformers'. "
+            "Run this in an environment with torch/transformers installed."
+        ) from exc
+
+    set_seed(config["seed"])
+    tokenizer = AutoTokenizer.from_pretrained(
+        config["model_name"],
+        trust_remote_code=config["trust_remote_code"],
+    )
+    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    torch_dtype: Any = "auto"
+    if config["dtype"] != "auto":
+        dtype_name = str(config["dtype"])
+        torch_dtype = getattr(torch, dtype_name) if hasattr(torch, dtype_name) else dtype_name
+
+    cuda_available = torch.cuda.is_available()
+    model = AutoModelForCausalLM.from_pretrained(
+        config["model_name"],
+        torch_dtype=torch_dtype,
+        device_map="auto" if cuda_available else None,
+        trust_remote_code=config["trust_remote_code"],
+    )
+    if not cuda_available:
+        model = model.to("cpu")
+    model.eval()
+
+    if hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template:
+        messages = [{"role": "user", "content": prompt}]
+        encoded = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
+        )
+        input_ids = encoded.to(model.device)
+        attention_mask = None
+    else:
+        encoded = tokenizer(prompt, return_tensors="pt")
+        input_ids = encoded["input_ids"].to(model.device)
+        attention_mask = encoded.get("attention_mask")
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(model.device)
+
+    generation_kwargs: dict[str, Any] = {
+        "input_ids": input_ids,
+        "max_new_tokens": config["max_tokens"],
+        "do_sample": config["do_sample"],
+        "temperature": config["temperature"],
+        "top_p": config["top_p"],
+        "pad_token_id": tokenizer.pad_token_id,
+        "eos_token_id": tokenizer.eos_token_id,
+    }
+    if attention_mask is not None:
+        generation_kwargs["attention_mask"] = attention_mask
+
+    with torch.no_grad():
+        output_ids = model.generate(**generation_kwargs)
+
+    generated_ids = output_ids[0, input_ids.shape[-1]:]
+    text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    return [
+        {
+            "request_index": 0,
+            "candidate_index": 0,
+            "text": text,
+            "finish_reason": None,
+        }
+    ]
+
+
+def generate_text(prompt: str, config: dict[str, Any]) -> list[dict[str, Any]]:
+    if config["backend"] == "vllm":
+        return generate_with_vllm(prompt, config)
+    if config["backend"] == "transformers":
+        return generate_with_transformers(prompt, config)
+    raise ValueError(f"Unsupported backend: {config['backend']}")
 
 
 def extract_first_json_object(text: str) -> Any:
@@ -256,7 +350,7 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     prompt = load_prompt(config)
 
-    raw_records = generate_with_vllm(prompt, config)
+    raw_records = generate_text(prompt, config)
     write_jsonl(raw_records, output_dir / "raw_generations.jsonl")
 
     parse_errors: list[str] = []

@@ -4,10 +4,12 @@ output_dir: outputs/generation/synthetic
 
 model_name: Qwen/Qwen3-4B
 requested_number_of_abstracts: 3
+backend: transformers
 
 temperature: 0.7
 top_p: 0.9
 max_tokens: 4096
+do_sample: true
 seed: 42
 
 tensor_parallel_size: 1
