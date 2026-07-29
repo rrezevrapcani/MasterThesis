@@ -1,0 +1,29 @@
+input_file: datasets/biored/processed/train_for_my_pipeline.csv
+output_dir: outputs/generation/few_shot
+
+doc_id_column: doc_id
+text_column: marked_text
+label_column: relation_type
+entity1_text_column: entity1_text
+entity2_text_column: entity2_text
+entity1_id_column: entity1_id
+entity2_id_column: entity2_id
+entity1_type_column: entity1_type
+entity2_type_column: entity2_type
+entity_pair_type_column: entity_pair_type
+
+required_labels:
+  - No_Relation
+  - Association
+  - Bind
+  - Comparison
+  - Conversion
+  - Cotreatment
+  - Drug_Interaction
+  - Negative_Correlation
+  - Positive_Correlation
+
+number_of_documents: 4
+beam_width: 5000
+ideal_min_words: 150
+ideal_max_words: 650

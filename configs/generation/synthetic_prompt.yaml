@@ -1,0 +1,24 @@
+few_shot_examples_file: outputs/generation/few_shot/few_shot_examples.json
+coverage_file: outputs/generation/few_shot/few_shot_coverage.json
+output_dir: outputs/generation/prompts
+
+prompt_name: baseline_prompt
+requested_number_of_abstracts: 3
+
+labels:
+  - No_Relation
+  - Association
+  - Bind
+  - Comparison
+  - Conversion
+  - Cotreatment
+  - Drug_Interaction
+  - Negative_Correlation
+  - Positive_Correlation
+
+entity_types:
+  - GeneOrGeneProduct
+  - DiseaseOrPhenotypicFeature
+  - ChemicalEntity
+
+marker_instruction: Use exactly one source marker pair and one target marker pair per candidate marked_text field, such as [GENE_SRC]...[/GENE_SRC] and [DISEASE_TGT]...[/DISEASE_TGT].
