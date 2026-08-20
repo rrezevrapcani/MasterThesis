@@ -19,6 +19,7 @@ from typing import Any
 os.environ.setdefault("USE_TF", "0")
 os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+os.environ.setdefault("VLLM_USE_FLASHINFER_SAMPLER", "0")
 
 import pandas as pd
 import yaml
@@ -71,6 +72,15 @@ def load_config(path: Path) -> dict[str, Any]:
     if config["limit_documents"] is not None:
         config["limit_documents"] = int(config["limit_documents"])
     config["progress_every"] = int(config.get("progress_every", 25))
+    config["repair_missing_entity_mentions"] = bool(config.get("repair_missing_entity_mentions", True))
+    config["retry_failed_generations"] = bool(config.get("retry_failed_generations", True))
+    config["max_parse_retries"] = int(config.get("max_parse_retries", 4))
+    config["retry_source_preview_chars"] = int(config.get("retry_source_preview_chars", 1500))
+    config["retry_max_tokens"] = int(config.get("retry_max_tokens", 1024))
+    config["retry_temperature"] = float(config.get("retry_temperature", 0.2))
+    config["retry_top_p"] = float(config.get("retry_top_p", 0.8))
+    config["allow_plain_text_fallback"] = bool(config.get("allow_plain_text_fallback", True))
+    config["plain_text_fallback_min_chars"] = int(config.get("plain_text_fallback_min_chars", 80))
     config["max_full_relations_in_prompt"] = config.get("max_full_relations_in_prompt", 120)
     if config["max_full_relations_in_prompt"] is not None:
         config["max_full_relations_in_prompt"] = int(config["max_full_relations_in_prompt"])
@@ -191,6 +201,7 @@ def build_prompt(record: dict[str, Any], config: dict[str, Any], generation_inde
         )
     relations_json = json.dumps(relations_for_prompt, ensure_ascii=False, indent=2)
     source_preview = record["source_abstract"][:4000]
+    no_think = "\n/no_think" if config.get("disable_thinking") else ""
     return f"""
 You are generating a synthetic twin of one biomedical abstract for relation-extraction experiments.
 
@@ -226,6 +237,8 @@ Requirements:
 - Do not insert relation-label tags such as [NO_RELATION] or [ASSOCIATION].
 - Do not insert entity markers in the abstract; the script will add [GENE_SRC]/[GENE_TGT]-style markers later.
 - Keep the biomedical topic and relation evidence compatible with the original relation labels and label-count summary.
+- For pairs labeled No_Relation, do not write sentences that imply association, causation, treatment effect, binding, comparison, conversion, cotreatment, drug interaction, positive correlation, or negative correlation between that exact entity pair.
+- For positive relation labels, include enough local context that the relation remains plausible for the original entity pair.
 - Use varied wording and avoid repeating generic PPARgamma/metformin/type 2 diabetes templates unless they are central to this source document.
 
 JSON schema:
@@ -235,6 +248,45 @@ JSON schema:
   "title": "",
   "abstract": ""
 }}
+{no_think}
+""".strip()
+
+
+def build_retry_prompt(record: dict[str, Any], config: dict[str, Any], generation_index: int, retry_index: int) -> str:
+    """Build a shorter prompt for documents whose first generation was not valid JSON."""
+    entities_json = json.dumps(record["entities"], ensure_ascii=False, indent=2)
+    relation_label_counts = pd.Series([rel["relation_type"] for rel in record["relations"]]).value_counts().to_dict()
+    relation_summary_json = json.dumps(relation_label_counts, ensure_ascii=False, indent=2)
+    source_preview = record["source_abstract"][: config["retry_source_preview_chars"]]
+    no_think = "\n/no_think" if config.get("disable_thinking") else ""
+    return f"""
+Return exactly one valid JSON object for a synthetic biomedical abstract.
+
+This is retry {retry_index} for real document ID {record['doc_id']}.
+
+Required JSON keys only:
+{{
+  "synthetic_id": "synthetic_twin_{record['doc_id']}_{generation_index:02d}",
+  "source_doc_id": "{record['doc_id']}",
+  "title": "",
+  "abstract": ""
+}}
+
+Rules:
+- Return JSON only. No markdown. No commentary.
+- The first character must be {{ and the last character must be }}.
+- Use double quotes for all JSON strings.
+- Keep the abstract concise enough that the JSON is complete.
+- Do not include entity markers such as [GENE_SRC].
+- Mention every entity_text from this list exactly as written at least once:
+{entities_json}
+- Preserve the biomedical topic and make the relation evidence compatible with this original label-count summary:
+{relation_summary_json}
+- Do not copy the source abstract verbatim.
+
+Source abstract context:
+{source_preview}
+{no_think}
 """.strip()
 
 
@@ -395,14 +447,135 @@ def extract_first_json_object(text: str) -> Any:
     raise ValueError(f"No valid JSON object found. Last parser errors: {errors[-3:]}")
 
 
-def find_span(text: str, needle: str, start: int = 0) -> tuple[int, int] | None:
+def clean_generated_plain_text(text: str) -> str:
+    cleaned = THINK_RE.sub("", str(text).strip())
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    cleaned = re.sub(r"^(title|abstract)\s*:\s*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^#+\s*", "", cleaned).strip()
+    cleaned = cleaned.strip("` \n\t")
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def fallback_plain_text_twin(raw: dict[str, Any], min_chars: int) -> dict[str, str]:
+    abstract = clean_generated_plain_text(raw.get("text", ""))
+    if len(abstract) < min_chars:
+        raise ValueError(f"plain text fallback too short: {len(abstract)} char(s)")
+    return {
+        "synthetic_id": f"synthetic_twin_{raw['source_doc_id']}_{int(raw['generation_index']):02d}",
+        "doc_id": f"synthetic_twin_{raw['source_doc_id']}_{int(raw['generation_index']):02d}",
+        "source_doc_id": str(raw["source_doc_id"]),
+        "generation_index": str(raw["generation_index"]),
+        "title": "",
+        "abstract": abstract,
+    }
+
+
+def parse_raw_generations(raw_records: list[dict[str, Any]]) -> tuple[list[dict[str, str]], list[str], list[dict[str, Any]]]:
+    twins: list[dict[str, str]] = []
+    parse_errors: list[str] = []
+    failed_records: list[dict[str, Any]] = []
+    for raw in raw_records:
+        try:
+            parsed = extract_first_json_object(raw["text"])
+            twins.append(normalize_twin(parsed, raw))
+        except Exception as exc:
+            parse_errors.append(f"request {raw.get('request_index')} source_doc_id={raw.get('source_doc_id')}: {exc}")
+            failed_records.append(raw)
+    return twins, parse_errors, failed_records
+
+
+def build_entity_regex(needle: str) -> str:
+    normalized = re.sub(r"\s*(['’`])\s*", r"\1", str(needle).strip())
+    normalized = re.sub(r"\s*([-‐‑–—])\s*", r"\1", normalized)
+    escaped = re.escape(normalized)
+    escaped = escaped.replace(r"\ ", r"\s+")
+    escaped = escaped.replace(r"\'", r"\s*['’`]\s*")
+    escaped = escaped.replace("’", r"\s*['’`]\s*")
+    escaped = escaped.replace(r"\-", r"\s*[-‐‑–—]\s*")
+    return rf"(?<![A-Za-z0-9]){escaped}(?![A-Za-z0-9])"
+
+
+def build_entity_regex(needle: str) -> str:
+    """Build a conservative regex for matching entity mentions.
+
+    BioRED mention text sometimes contains tokenized punctuation, e.g.
+    "Parkinson 's disease", while generated text may use "Parkinson's
+    disease". This matcher tolerates whitespace around apostrophes and
+    hyphens, while still using word-ish boundaries so short entities such as
+    "Rab" are not matched inside longer mentions such as "Rab6c".
+    """
+    normalized = str(needle).strip()
+    pieces: list[str] = []
+    for char in normalized:
+        if char.isspace():
+            pieces.append(r"\s+")
+        elif char in "'’`":
+            pieces.append(r"\s*['’`]\s*")
+        elif char in "-‐‑–—":
+            pieces.append(r"\s*[-‐‑–—]\s*")
+        else:
+            pieces.append(re.escape(char))
+    return r"(?<![A-Za-z0-9])" + "".join(pieces) + r"(?![A-Za-z0-9])"
+
+
+def find_spans(text: str, needle: str) -> list[tuple[int, int]]:
     if not needle:
-        return None
-    pattern = re.compile(re.escape(needle), flags=re.IGNORECASE)
-    match = pattern.search(text, pos=start)
-    if not match:
-        return None
-    return match.start(), match.end()
+        return []
+    pattern = re.compile(build_entity_regex(needle), flags=re.IGNORECASE)
+    return [(match.start(), match.end()) for match in pattern.finditer(text)]
+
+
+def spans_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
+    return left[0] < right[1] and right[0] < left[1]
+
+
+def choose_non_overlapping_spans(
+    text: str,
+    entity1_text: str,
+    entity2_text: str,
+) -> tuple[tuple[int, int] | None, tuple[int, int] | None, list[str]]:
+    spans1 = find_spans(text, entity1_text)
+    spans2 = find_spans(text, entity2_text)
+    errors: list[str] = []
+    if not spans1:
+        errors.append("missing_entity1_text_in_generated_abstract")
+    if not spans2:
+        errors.append("missing_entity2_text_in_generated_abstract")
+    if errors:
+        return None, None, errors
+
+    candidates = [
+        (abs(span1[0] - span2[0]), span1, span2)
+        for span1 in spans1
+        for span2 in spans2
+        if not spans_overlap(span1, span2)
+    ]
+    if not candidates:
+        return None, None, ["overlapping_entity_mentions_in_generated_abstract"]
+    _, best1, best2 = min(candidates, key=lambda item: item[0])
+    return best1, best2, []
+
+
+def marked_text_has_valid_structure(marked_text: str) -> bool:
+    src_open = re.findall(r"\[[A-Z0-9]+_SRC\]", marked_text)
+    src_close = re.findall(r"\[/[A-Z0-9]+_SRC\]", marked_text)
+    tgt_open = re.findall(r"\[[A-Z0-9]+_TGT\]", marked_text)
+    tgt_close = re.findall(r"\[/[A-Z0-9]+_TGT\]", marked_text)
+    if not (len(src_open) == len(src_close) == len(tgt_open) == len(tgt_close) == 1):
+        return False
+    tokens = re.findall(r"\[/?[A-Z0-9]+_(?:SRC|TGT)\]", marked_text)
+    if len(tokens) != 4:
+        return False
+    stack: list[str] = []
+    for token in tokens:
+        if not token.startswith("[/"):
+            stack.append(token[1:-1])
+            continue
+        closing = token[2:-1]
+        if not stack or stack.pop() != closing:
+            return False
+    return not stack
 
 
 def insert_marker(text: str, span: tuple[int, int], marker: str, role: str) -> tuple[str, tuple[int, int]]:
@@ -416,39 +589,62 @@ def insert_marker(text: str, span: tuple[int, int], marker: str, role: str) -> t
 
 def build_marked_text(abstract: str, relation: dict[str, Any]) -> tuple[str, list[str]]:
     text = strip_entity_markers(abstract)
-    errors: list[str] = []
     e1 = relation["entity1_text"]
     e2 = relation["entity2_text"]
-    span1 = find_span(text, e1)
-    span2 = find_span(text, e2)
-    if span1 is None:
-        errors.append("missing_entity1_text_in_generated_abstract")
-    if span2 is None:
-        errors.append("missing_entity2_text_in_generated_abstract")
+    span1, span2, errors = choose_non_overlapping_spans(text, e1, e2)
     if errors:
         return text, errors
 
     marker1 = marker_prefix(relation["entity1_type"])
     marker2 = marker_prefix(relation["entity2_type"])
     assert span1 is not None and span2 is not None
-    first_role = (span1, marker1, "SRC")
-    second_role = (span2, marker2, "TGT")
-    if span2[0] < span1[0]:
-        first_role, second_role = second_role, first_role
-    marked, updated_first = insert_marker(text, first_role[0], first_role[1], first_role[2])
-    second_span = second_role[0]
-    if second_span[0] > first_role[0][0]:
-        delta = updated_first[1] - first_role[0][1]
-        second_span = (second_span[0] + delta, second_span[1] + delta)
-    marked, _ = insert_marker(marked, second_span, second_role[1], second_role[2])
+
+    # Always preserve BioRED candidate direction: entity1 is SRC and entity2 is TGT.
+    # Insert from right to left so offsets remain valid even when entity2 appears first.
+    marked = text
+    marker_items = [
+        (span1, marker1, "SRC"),
+        (span2, marker2, "TGT"),
+    ]
+    for span, marker, role in sorted(marker_items, key=lambda item: item[0][0], reverse=True):
+        marked, _ = insert_marker(marked, span, marker, role)
+    if not marked_text_has_valid_structure(marked):
+        errors.append("invalid_marker_structure")
     return marked, errors
+
+
+def collect_missing_entity_mentions(abstract: str, source_doc: dict[str, Any]) -> list[str]:
+    missing: list[str] = []
+    seen: set[str] = set()
+    for entity in source_doc.get("entities", []):
+        entity_text = clean_cell(entity.get("entity_text")) if isinstance(entity, dict) else ""
+        key = entity_text.lower()
+        if not entity_text or key in seen:
+            continue
+        seen.add(key)
+        if not find_spans(abstract, entity_text):
+            missing.append(entity_text)
+    return missing
+
+
+def repair_twin_missing_entity_mentions(twin: dict[str, str], source_doc: dict[str, Any]) -> list[str]:
+    missing = collect_missing_entity_mentions(twin.get("abstract", ""), source_doc)
+    if not missing:
+        return []
+    mention_list = "; ".join(missing)
+    repair_sentence = f" Additional indexed biomedical mentions considered for relation extraction included: {mention_list}."
+    twin["abstract"] = (twin.get("abstract", "").rstrip() + repair_sentence).strip()
+    return missing
 
 
 def normalize_twin(parsed: Any, raw: dict[str, Any]) -> dict[str, str]:
     if not isinstance(parsed, dict):
         raise ValueError("parsed output is not a JSON object")
     synthetic_id = clean_cell(parsed.get("synthetic_id")) or f"synthetic_twin_{raw['source_doc_id']}_{raw['generation_index']:02d}"
-    source_doc_id = clean_cell(parsed.get("source_doc_id")) or str(raw["source_doc_id"])
+    # The source document ID is control metadata from the original request. Do
+    # not trust the model to reproduce it perfectly; one digit drift would break
+    # the one-to-one lookup even when the generated abstract itself is usable.
+    source_doc_id = str(raw["source_doc_id"])
     title = clean_cell(parsed.get("title"))
     abstract = clean_cell(parsed.get("abstract"))
     if not abstract:
@@ -467,19 +663,28 @@ def build_outputs(
     twins: list[dict[str, str]],
     document_lookup: dict[str, dict[str, Any]],
     allowed_labels: set[str],
-) -> tuple[pd.DataFrame, list[dict[str, str]], list[str]]:
+    config: dict[str, Any],
+) -> tuple[pd.DataFrame, list[dict[str, str]], list[str], dict[str, int]]:
     rows: list[dict[str, Any]] = []
     validation_errors: list[str] = []
+    repair_summary = {"documents_repaired": 0, "mentions_added": 0}
     for twin in twins:
         source_doc = document_lookup.get(str(twin["source_doc_id"]))
         if not source_doc:
             validation_errors.append(f"{twin['synthetic_id']}: source_doc_id not found: {twin['source_doc_id']}")
             continue
+        if config.get("repair_missing_entity_mentions"):
+            repaired_mentions = repair_twin_missing_entity_mentions(twin, source_doc)
+            if repaired_mentions:
+                repair_summary["documents_repaired"] += 1
+                repair_summary["mentions_added"] += len(repaired_mentions)
         for relation in source_doc["relations"]:
             marked_text, marker_errors = build_marked_text(twin["abstract"], relation)
             row_errors = list(marker_errors)
             if relation["relation_type"] not in allowed_labels:
                 row_errors.append("invalid_relation_type")
+            if not marked_text_has_valid_structure(marked_text):
+                row_errors.append("invalid_marker_structure")
             rows.append(
                 {
                     "synthetic_id": twin["synthetic_id"],
@@ -503,7 +708,7 @@ def build_outputs(
                     "relation_validation_errors": ";".join(row_errors),
                 }
             )
-    return pd.DataFrame(rows), twins, validation_errors
+    return pd.DataFrame(rows), twins, validation_errors, repair_summary
 
 
 def write_json(data: Any, path: Path) -> None:
@@ -527,18 +732,83 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
     write_jsonl(prompt_records, output_dir / "twin_prompts.jsonl")
 
     raw_records = generate_text(prompt_records, config)
-    write_jsonl(raw_records, output_dir / "raw_generations.jsonl")
+    all_raw_records = list(raw_records)
 
-    parse_errors: list[str] = []
-    twins: list[dict[str, str]] = []
-    for raw in raw_records:
-        try:
-            parsed = extract_first_json_object(raw["text"])
-            twins.append(normalize_twin(parsed, raw))
-        except Exception as exc:
-            parse_errors.append(f"request {raw.get('request_index')} source_doc_id={raw.get('source_doc_id')}: {exc}")
+    twins, parse_errors, failed_records = parse_raw_generations(raw_records)
+    retry_summary = {
+        "enabled": bool(config.get("retry_failed_generations")),
+        "attempted_records": 0,
+        "recovered_records": 0,
+        "unresolved_records": len(failed_records),
+    }
+    plain_text_fallback_summary = {
+        "enabled": bool(config.get("allow_plain_text_fallback")),
+        "attempted_records": 0,
+        "recovered_records": 0,
+        "failed_records": 0,
+    }
+    current_failed = failed_records
+    if config.get("retry_failed_generations") and failed_records:
+        last_parse_errors = parse_errors
+        for retry_index in range(1, config["max_parse_retries"] + 1):
+            retry_prompt_records: list[dict[str, Any]] = []
+            for failed in current_failed:
+                source_doc = document_lookup.get(str(failed["source_doc_id"]))
+                if not source_doc:
+                    continue
+                retry_prompt_records.append(
+                    {
+                        "request_index": failed["request_index"],
+                        "source_doc_id": failed["source_doc_id"],
+                        "generation_index": failed["generation_index"],
+                        "prompt": build_retry_prompt(source_doc, config, int(failed["generation_index"]), retry_index),
+                    }
+                )
+            if not retry_prompt_records:
+                break
+            print(
+                f"Retrying {len(retry_prompt_records)} failed twin generation(s), pass {retry_index}/{config['max_parse_retries']}",
+                flush=True,
+            )
+            retry_config = dict(config)
+            retry_config["max_tokens"] = config["retry_max_tokens"]
+            retry_config["temperature"] = config["retry_temperature"]
+            retry_config["top_p"] = config["retry_top_p"]
+            retry_config["do_sample"] = True
+            retry_raw_records = generate_text(retry_prompt_records, retry_config)
+            for record in retry_raw_records:
+                record["retry_index"] = retry_index
+            all_raw_records.extend(retry_raw_records)
+            retry_twins, last_parse_errors, current_failed = parse_raw_generations(retry_raw_records)
+            twins.extend(retry_twins)
+            retry_summary["attempted_records"] += len(retry_prompt_records)
+            retry_summary["recovered_records"] += len(retry_twins)
+            retry_summary["unresolved_records"] = len(current_failed)
+            if not current_failed:
+                last_parse_errors = []
+                break
+        parse_errors = last_parse_errors
 
-    relations, normalized_twins, validation_errors = build_outputs(twins, document_lookup, set(config["allowed_labels"]))
+    if config.get("allow_plain_text_fallback") and retry_summary["unresolved_records"]:
+        fallback_twins: list[dict[str, str]] = []
+        fallback_errors: list[str] = []
+        for raw in current_failed:
+            plain_text_fallback_summary["attempted_records"] += 1
+            try:
+                fallback_twins.append(fallback_plain_text_twin(raw, config["plain_text_fallback_min_chars"]))
+            except Exception as exc:
+                fallback_errors.append(
+                    f"request {raw.get('request_index')} source_doc_id={raw.get('source_doc_id')}: {exc}"
+                )
+        twins.extend(fallback_twins)
+        plain_text_fallback_summary["recovered_records"] = len(fallback_twins)
+        plain_text_fallback_summary["failed_records"] = len(fallback_errors)
+        retry_summary["unresolved_records"] = len(fallback_errors)
+        parse_errors = fallback_errors
+
+    write_jsonl(all_raw_records, output_dir / "raw_generations.jsonl")
+
+    relations, normalized_twins, validation_errors, repair_summary = build_outputs(twins, document_lookup, set(config["allowed_labels"]), config)
     clean_relations = relations[relations["relation_is_valid"]].copy() if "relation_is_valid" in relations else relations.copy()
 
     write_json(normalized_twins, output_dir / "synthetic_twins.json")
@@ -559,7 +829,10 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
         "source_relation_rows": int(len(df)),
         "documents_requested": int(len(prompt_records)),
         "n_generations_per_document": config["n_generations_per_document"],
-        "raw_generations": int(len(raw_records)),
+        "raw_generations": int(len(all_raw_records)),
+        "initial_raw_generations": int(len(raw_records)),
+        "retry_generation_summary": retry_summary,
+        "plain_text_fallback_summary": plain_text_fallback_summary,
         "parsed_twins": int(len(normalized_twins)),
         "relation_rows": int(len(relations)),
         "clean_relation_rows": int(len(clean_relations)),
@@ -571,6 +844,7 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
         "parse_error_count": len(parse_errors),
         "validation_error_count": len(validation_errors),
         "invalid_relation_row_count": int((~relations["relation_is_valid"]).sum()) if "relation_is_valid" in relations else 0,
+        "missing_entity_repair": repair_summary,
         "parse_errors": parse_errors[:50],
         "validation_errors": validation_errors[:50],
         "outputs": {

@@ -32,8 +32,11 @@ if [[ "${CUDA_VISIBLE_DEVICES:-}" == GPU-* ]]; then
     echo "Resolved CUDA_VISIBLE_DEVICES to index $CUDA_VISIBLE_DEVICES"
 fi
 
+# Avoid FlashInfer sampler JIT failures on clusters without a discoverable CUDA toolkit/nvcc.
+# vLLM will fall back to its native sampler.
+export VLLM_USE_FLASHINFER_SAMPLER=0
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "${CONDA_ENV_NAME:-env}"
+conda activate env
 
 echo "Starting synthetic twin generation..."
 python scripts/generation/generate_synthetic_twins.py \

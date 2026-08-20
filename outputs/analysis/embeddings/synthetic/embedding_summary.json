@@ -1,0 +1,10 @@
+{
+  "number_of_rows": 22641,
+  "embedding_dimension": 768,
+  "model_name": "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
+  "pooling": "cls",
+  "max_length": 512,
+  "batch_size": 32,
+  "device": "cuda",
+  "number_of_batches": 708
+}

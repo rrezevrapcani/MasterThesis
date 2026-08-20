@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-08-20T13:16:24.055055+00:00",
+  "strategy": "synthetic_twins_one_to_one_relation_preserving",
+  "model_name": "Qwen/Qwen3-4B",
+  "backend": "vllm",
+  "input_file": "datasets/biored/processed/train_for_my_pipeline.csv",
+  "source_documents": 398,
+  "source_relation_rows": 22896,
+  "documents_requested": 398,
+  "n_generations_per_document": 1,
+  "raw_generations": 585,
+  "initial_raw_generations": 398,
+  "retry_generation_summary": {
+    "enabled": true,
+    "attempted_records": 187,
+    "recovered_records": 52,
+    "unresolved_records": 0
+  },
+  "plain_text_fallback_summary": {
+    "enabled": true,
+    "attempted_records": 30,
+    "recovered_records": 30,
+    "failed_records": 0
+  },
+  "parsed_twins": 398,
+  "relation_rows": 22896,
+  "clean_relation_rows": 22641,
+  "dropped_relation_rows": 255,
+  "unique_source_documents_in_clean": 398,
+  "unique_synthetic_documents_in_clean": 398,
+  "label_counts": {
+    "No_Relation": 18721,
+    "Association": 2191,
+    "Positive_Correlation": 1088,
+    "Negative_Correlation": 763,
+    "Bind": 60,
+    "Cotreatment": 31,
+    "Comparison": 28,
+    "Drug_Interaction": 11,
+    "Conversion": 3
+  },
+  "clean_label_counts": {
+    "No_Relation": 18478,
+    "Association": 2181,
+    "Positive_Correlation": 1088,
+    "Negative_Correlation": 763,
+    "Bind": 58,
+    "Cotreatment": 31,
+    "Comparison": 28,
+    "Drug_Interaction": 11,
+    "Conversion": 3
+  },
+  "parse_error_count": 0,
+  "validation_error_count": 0,
+  "invalid_relation_row_count": 255,
+  "missing_entity_repair": {
+    "documents_repaired": 134,
+    "mentions_added": 273
+  },
+  "parse_errors": [],
+  "validation_errors": [],
+  "outputs": {
+    "twin_prompts": "twin_prompts.jsonl",
+    "raw_generations": "raw_generations.jsonl",
+    "synthetic_twins": "synthetic_twins.json",
+    "synthetic_twin_relations": "synthetic_twin_relations.csv",
+    "synthetic_twin_relations_clean": "synthetic_twin_relations_clean.csv",
+    "synthetic_twin_generation_config": "synthetic_twin_generation_config.json"
+  }
+}

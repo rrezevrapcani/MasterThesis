@@ -24,6 +24,15 @@ top_p: 0.95
 disable_thinking: true
 seed: 42
 progress_every: 25
+repair_missing_entity_mentions: true
+retry_failed_generations: true
+max_parse_retries: 4
+retry_source_preview_chars: 1500
+retry_max_tokens: 1024
+retry_temperature: 0.2
+retry_top_p: 0.8
+allow_plain_text_fallback: true
+plain_text_fallback_min_chars: 80
 max_full_relations_in_prompt: 120
 
 tensor_parallel_size: 1
