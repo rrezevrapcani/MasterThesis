@@ -1,0 +1,62 @@
+input_file: datasets/biored/processed/train_rare_label_docs_for_twins.csv
+output_dir: outputs/generation/synthetic_twins_rare_boost
+
+text_column: marked_text
+label_column: relation_type
+doc_id_column: doc_id
+entity1_text_column: entity1_text
+entity2_text_column: entity2_text
+entity1_id_column: entity1_id
+entity2_id_column: entity2_id
+entity1_type_column: entity1_type
+entity2_type_column: entity2_type
+entity_pair_type_column: entity_pair_type
+
+model_name: Qwen/Qwen3-4B
+backend: vllm
+
+# Rare-label boost experiment:
+# Generate multiple synthetic variants for documents that contain rare labels.
+# This is not the strict one-to-one comparison dataset; it is an augmentation
+# dataset for testing whether generation-stage balancing improves F1.
+n_generations_per_document: 5
+limit_documents:
+
+max_tokens: 2048
+do_sample: true
+temperature: 0.9
+top_p: 0.95
+disable_thinking: true
+seed: 123
+progress_every: 25
+repair_missing_entity_mentions: true
+retry_failed_generations: true
+max_parse_retries: 4
+retry_source_preview_chars: 1500
+retry_max_tokens: 1024
+retry_temperature: 0.2
+retry_top_p: 0.8
+allow_plain_text_fallback: true
+plain_text_fallback_min_chars: 80
+max_full_relations_in_prompt: 120
+
+tensor_parallel_size: 1
+dtype: auto
+gpu_memory_utilization: 0.9
+trust_remote_code: true
+
+allowed_labels:
+  - No_Relation
+  - Association
+  - Bind
+  - Comparison
+  - Conversion
+  - Cotreatment
+  - Drug_Interaction
+  - Negative_Correlation
+  - Positive_Correlation
+
+allowed_entity_types:
+  - GeneOrGeneProduct
+  - DiseaseOrPhenotypicFeature
+  - ChemicalEntity
