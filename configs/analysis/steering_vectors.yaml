@@ -1,0 +1,38 @@
+real_embeddings_file: outputs/analysis/embeddings/embeddings.npy
+real_metadata_file: outputs/analysis/embeddings/metadata.csv
+
+synthetic_embeddings_file: outputs/analysis/embeddings/synthetic/embeddings.npy
+synthetic_metadata_file: outputs/analysis/embeddings/synthetic/metadata.csv
+
+output_dir: outputs/analysis/steering_vectors
+
+label_column: relation_type
+doc_id_column: doc_id
+entity_pair_type_column: entity_pair_type
+
+random_state: 42
+test_size: 0.2
+standardize_probe: true
+balance_by_label: true
+
+# Keep empty/null to use all available balanced rows. Set e.g. 10000 for faster tests.
+max_rows_per_domain:
+
+# overall_centroid uses one real-minus-synthetic vector for all synthetic embeddings.
+# per_label_centroid uses one vector per relation label where enough examples exist.
+steering_mode: overall_centroid
+
+alphas:
+  - 0.0
+  - 0.25
+  - 0.5
+  - 0.75
+  - 1.0
+  - 1.25
+
+save_steered_embeddings: false
+
+pca:
+  max_points_per_domain: 10000
+  alpha: 0.45
+  point_size: 8
