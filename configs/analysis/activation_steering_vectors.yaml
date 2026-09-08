@@ -1,0 +1,20 @@
+real_input_file: datasets/biored/processed/train_for_my_pipeline.csv
+synthetic_input_file: outputs/generation/synthetic_twins_qwen4b_initial_length_restricted/synthetic_twin_relations_clean.csv
+output_dir: outputs/analysis/activation_steering_vectors/qwen4b_initial_length_restricted
+
+# Use the same model/tokenizer that will later receive the steering vector.
+# For prediction-time steering, run this once for the binary final_model and
+# once for the multiclass final_model, changing output_dir each time.
+model_name_or_path: results/pubmedbert_hierarchical_biored/stage1_binary_classifier/final_model
+
+text_column: marked_text
+label_column: relation_type
+
+max_length: 512
+batch_size: 32
+layer_index: 11
+position: cls
+balance_by_label: true
+max_rows_per_domain:
+random_state: 42
+progress_every: 10
