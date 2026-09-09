@@ -1,0 +1,20 @@
+real_input_file: datasets/biored/processed/train_for_my_pipeline.csv
+synthetic_input_file: outputs/generation/synthetic_twins_qwen4b_initial_length_restricted/synthetic_twin_relations_clean.csv
+output_dir: outputs/generation/easysteer_vectors/qwen4b_initial_length_restricted
+
+model_name: Qwen/Qwen3-4B
+
+doc_id_column: doc_id
+text_column: marked_text
+synthetic_abstract_column: abstract
+
+max_length: 1024
+batch_size: 4
+layer_indices:
+  - -1
+position: last_token
+max_documents_per_domain: 200
+random_state: 42
+dtype: auto
+trust_remote_code: true
+progress_every: 10
