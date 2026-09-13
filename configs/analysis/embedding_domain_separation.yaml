@@ -1,0 +1,28 @@
+real_embeddings_file: outputs/analysis/embeddings/embeddings.npy
+real_metadata_file: outputs/analysis/embeddings/metadata.csv
+
+synthetic_embeddings_file: outputs/analysis/embeddings/synthetic_twins_qwen4b_initial_length_restricted/embeddings.npy
+synthetic_metadata_file: outputs/analysis/embeddings/synthetic_twins_qwen4b_initial_length_restricted/metadata.csv
+
+output_dir: outputs/analysis/domain_separation/synthetic_twins_qwen4b_initial_length_restricted
+
+label_column: relation_type
+doc_id_column: doc_id
+entity_pair_type_column: entity_pair_type
+
+random_state: 42
+test_size: 0.2
+standardize: true
+
+# Keep empty/null to use all rows. Set e.g. 10000 for a faster diagnostic run.
+max_rows_per_domain:
+
+# If true, sample equal counts per relation label from real and synthetic where possible.
+# This tests domain separability without letting label imbalance drive the result.
+balance_by_label: true
+
+pca:
+  n_components: 2
+  max_points_per_domain: 10000
+  alpha: 0.45
+  point_size: 8
