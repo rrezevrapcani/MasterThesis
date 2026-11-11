@@ -1,0 +1,68 @@
+{
+  "inputs": {
+    "real": "/home/s93rvrap/projects/thesis/MasterThesis/datasets/biored/processed/train_for_my_pipeline.csv",
+    "positive_relations": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/synthetic_twins_qwen4b_initial_positive_relations_1/synthetic_twin_relations_clean.csv",
+    "rewording": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/biored_qwen4b_rewording/synthetic_twin_relations_clean.csv",
+    "backtranslation": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/biored_qwen4b_backtranslation_de/synthetic_twin_relations_clean.csv"
+  },
+  "encoder": {
+    "model_name": "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
+    "pooling": "cls",
+    "max_length": 512,
+    "batch_size": 32
+  },
+  "pca": {
+    "n_components": 2,
+    "max_points_per_domain": 10000,
+    "alpha": 0.45,
+    "point_size": 8,
+    "random_state": 42
+  },
+  "comparisons": {
+    "positive_relations": {
+      "sampling": "balanced_by_label",
+      "per_label_counts_per_domain": {
+        "Association": 2180,
+        "Bind": 58,
+        "Comparison": 28,
+        "Conversion": 3,
+        "Cotreatment": 31,
+        "Drug_Interaction": 11,
+        "Negative_Correlation": 763,
+        "No_Relation": 18463,
+        "Positive_Correlation": 1088
+      },
+      "plotted_rows": 20000
+    },
+    "rewording": {
+      "sampling": "balanced_by_label",
+      "per_label_counts_per_domain": {
+        "Association": 2181,
+        "Bind": 59,
+        "Comparison": 28,
+        "Conversion": 3,
+        "Cotreatment": 31,
+        "Drug_Interaction": 11,
+        "Negative_Correlation": 763,
+        "No_Relation": 18510,
+        "Positive_Correlation": 1088
+      },
+      "plotted_rows": 20000
+    },
+    "backtranslation": {
+      "sampling": "balanced_by_label",
+      "per_label_counts_per_domain": {
+        "Association": 2182,
+        "Bind": 59,
+        "Comparison": 28,
+        "Conversion": 3,
+        "Cotreatment": 31,
+        "Drug_Interaction": 11,
+        "Negative_Correlation": 763,
+        "No_Relation": 18503,
+        "Positive_Correlation": 1088
+      },
+      "plotted_rows": 20000
+    }
+  }
+}

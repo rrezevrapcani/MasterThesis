@@ -1,0 +1,12 @@
+{
+  "number_of_rows": 22668,
+  "number_of_unique_documents": 398,
+  "number_of_relation_types": 9,
+  "number_of_positive_examples": 4165,
+  "number_of_no_relation_examples": 18503,
+  "positive_to_no_relation_ratio": 0.2250986326541642,
+  "number_of_unique_entity_pairs": 22089,
+  "number_of_unique_relation_triples": 22668,
+  "number_of_unique_entity_ids": 2621,
+  "number_of_unique_entity_mentions": 3117
+}

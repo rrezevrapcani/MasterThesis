@@ -1,0 +1,6 @@
+entity_pair_type,count,percentage
+GeneOrGeneProduct__GeneOrGeneProduct,10374,45.30922431865828
+DiseaseOrPhenotypicFeature__GeneOrGeneProduct,5410,23.62858141160028
+ChemicalEntity__GeneOrGeneProduct,2912,12.718378756114603
+ChemicalEntity__DiseaseOrPhenotypicFeature,2587,11.298916841369671
+ChemicalEntity__ChemicalEntity,1613,7.044898672257164

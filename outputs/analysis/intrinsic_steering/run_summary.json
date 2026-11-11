@@ -1,0 +1,70 @@
+{
+  "inputs": {
+    "real": "/home/s93rvrap/projects/thesis/MasterThesis/datasets/biored/processed/train_for_my_pipeline.csv",
+    "positive_relations": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/synthetic_twins_qwen4b_initial_positive_relations_1/synthetic_twin_relations_clean.csv",
+    "rewording": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/biored_qwen4b_rewording/synthetic_twin_relations_clean.csv",
+    "steered_positive_relations": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/synthetic_twins_qwen4b_initial_positive_relations_easysteer_buckets/overall_scale1/synthetic_twin_relations_clean.csv",
+    "steered_rewording": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/synthetic_twins_qwen4b_rewording_easysteer_buckets/overall_scale0p5/synthetic_twin_relations_clean.csv"
+  },
+  "encoder": {
+    "model_name": "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
+    "pooling": "cls",
+    "max_length": 512,
+    "batch_size": 32
+  },
+  "pca": {
+    "n_components": 2,
+    "max_points_per_domain": 10000,
+    "alpha": 0.45,
+    "point_size": 8,
+    "random_state": 42
+  },
+  "comparisons": {
+    "steered_positive_relations": {
+      "sampling": "equal_within_shared_labels_across_three_groups",
+      "plotted_per_label_per_group": {
+        "Association": 955,
+        "Bind": 23,
+        "Comparison": 9,
+        "Conversion": 1,
+        "Cotreatment": 11,
+        "Drug_Interaction": 5,
+        "Negative_Correlation": 355,
+        "No_Relation": 8168,
+        "Positive_Correlation": 473
+      },
+      "plotted_rows_per_group": 10000,
+      "explained_variance_ratio": [
+        0.3457663655281067,
+        0.07990677654743195
+      ],
+      "reference": "real",
+      "unsteered": "positive_relations",
+      "steered": "steered_positive_relations",
+      "configuration": "overall_scale1"
+    },
+    "steered_rewording": {
+      "sampling": "equal_within_shared_labels_across_three_groups",
+      "plotted_per_label_per_group": {
+        "Association": 973,
+        "Bind": 25,
+        "Comparison": 9,
+        "Conversion": 0,
+        "Cotreatment": 12,
+        "Drug_Interaction": 4,
+        "Negative_Correlation": 362,
+        "No_Relation": 8159,
+        "Positive_Correlation": 456
+      },
+      "plotted_rows_per_group": 10000,
+      "explained_variance_ratio": [
+        0.28598377108573914,
+        0.11492034792900085
+      ],
+      "reference": "real",
+      "unsteered": "rewording",
+      "steered": "steered_rewording",
+      "configuration": "overall_scale0p5"
+    }
+  }
+}

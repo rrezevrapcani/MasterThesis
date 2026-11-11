@@ -1,0 +1,11 @@
+{
+  "total_rows": 22896,
+  "rows_with_src_marker": 22850,
+  "rows_with_tgt_marker": 22729,
+  "rows_with_both_markers": 22683,
+  "rows_missing_src_marker": 46,
+  "rows_missing_tgt_marker": 167,
+  "src_marker_coverage_pct": 99.79909154437456,
+  "tgt_marker_coverage_pct": 99.27061495457721,
+  "both_marker_coverage_pct": 99.06970649895179
+}
