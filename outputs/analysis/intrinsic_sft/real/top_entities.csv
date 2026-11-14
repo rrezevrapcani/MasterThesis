@@ -1,0 +1,51 @@
+entity_id,entity_type,representative_mention,count
+D009369,DiseaseOrPhenotypicFeature,cancer,563
+D007249,DiseaseOrPhenotypicFeature,inflammatory,284
+D005947,ChemicalEntity,glucose,212
+207,GeneOrGeneProduct,Akt,201
+26413,GeneOrGeneProduct,MAPK,193
+D007674,DiseaseOrPhenotypicFeature,nephropathy,183
+D002118,ChemicalEntity,calcium,182
+21926,GeneOrGeneProduct,TNF-alpha,169
+3569,GeneOrGeneProduct,IL-6,160
+7124,GeneOrGeneProduct,TNF,153
+26417,GeneOrGeneProduct,Erk 1/2,149
+3553,GeneOrGeneProduct,IL-1beta,144
+D008055,ChemicalEntity,lipid,142
+5594,GeneOrGeneProduct,MAPK,141
+D003404,ChemicalEntity,creatinine,136
+3630,GeneOrGeneProduct,insulin,134
+16193,GeneOrGeneProduct,IL-6,124
+D030342,DiseaseOrPhenotypicFeature,autosomal recessive disorder,117
+7422,GeneOrGeneProduct,VEGF,115
+11651,GeneOrGeneProduct,Akt,113
+1277,GeneOrGeneProduct,collagen I,110
+18033,GeneOrGeneProduct,TLR4/NF-kappaB,109
+D064420,DiseaseOrPhenotypicFeature,toxicity,108
+D006973,DiseaseOrPhenotypicFeature,hypertension,104
+D009765,DiseaseOrPhenotypicFeature,obese,104
+D017382,ChemicalEntity,reactive oxygen species,99
+4790,GeneOrGeneProduct,TLR4/NF-kappaB,95
+3576,GeneOrGeneProduct,IL-8,92
+D005355,DiseaseOrPhenotypicFeature,fibrosis,89
+D007545,ChemicalEntity,isoproterenol-induced,88
+7040,GeneOrGeneProduct,TGF-beta1,86
+D011471,DiseaseOrPhenotypicFeature,prostate cancer,85
+D014280,ChemicalEntity,Triglyceride,85
+D004317,ChemicalEntity,doxorubicin-induced,84
+1278,GeneOrGeneProduct,collagen I,82
+D003920,DiseaseOrPhenotypicFeature,diabetes,82
+D006331,DiseaseOrPhenotypicFeature,cardiac dysfunction,82
+21803,GeneOrGeneProduct,transforming growth factor (TGF)-beta1-stimulated,77
+D005978,ChemicalEntity,glutathione,77
+596,GeneOrGeneProduct,bcl-2,76
+D008569,DiseaseOrPhenotypicFeature,memory impairment,76
+5562,GeneOrGeneProduct,AMPK,75
+7099,GeneOrGeneProduct,TLR4/NF-kappaB,75
+6648,GeneOrGeneProduct,SOD2,74
+3586,GeneOrGeneProduct,IL-10,73
+5599,GeneOrGeneProduct,SAPK/JNK,73
+6647,GeneOrGeneProduct,SOD1,73
+D000242,ChemicalEntity,cyclic AMP,71
+26416,GeneOrGeneProduct,p38 MAPK,70
+D012964,ChemicalEntity,sodium,70

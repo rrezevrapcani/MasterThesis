@@ -1,0 +1,4 @@
+dataset,documents,candidate_rows,positive,no_relation,mean_words,median_words
+real,398,22896,4175,18721,274.856783919598,277.5
+positive_relations,398,22625,4162,18463,183.94472361809045,161.0
+sft_positive_relations,398,22677,4165,18512,276.7211055276382,275.0

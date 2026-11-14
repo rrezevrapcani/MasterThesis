@@ -1,0 +1,45 @@
+{
+  "inputs": {
+    "real": "/home/s93rvrap/projects/thesis/MasterThesis/datasets/biored/processed/train_for_my_pipeline.csv",
+    "positive_relations": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/synthetic_twins_qwen4b_initial_positive_relations_1/synthetic_twin_relations_clean.csv",
+    "sft_positive_relations": "/home/s93rvrap/projects/thesis/MasterThesis/outputs/generation/synthetic_twins_sft/epoch5/synthetic_twins_sft_with_source/synthetic_twin_relations_clean.csv"
+  },
+  "encoder": {
+    "model_name": "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
+    "pooling": "cls",
+    "max_length": 512,
+    "batch_size": 32
+  },
+  "pca": {
+    "n_components": 2,
+    "max_points_per_domain": 10000,
+    "alpha": 0.45,
+    "point_size": 8,
+    "random_state": 42
+  },
+  "comparisons": {
+    "sft_positive_relations": {
+      "sampling": "equal_within_shared_labels_across_three_groups",
+      "plotted_per_label_per_group": {
+        "Association": 955,
+        "Bind": 23,
+        "Comparison": 9,
+        "Conversion": 1,
+        "Cotreatment": 11,
+        "Drug_Interaction": 5,
+        "Negative_Correlation": 355,
+        "No_Relation": 8168,
+        "Positive_Correlation": 473
+      },
+      "plotted_rows_per_group": 10000,
+      "explained_variance_ratio": [
+        0.3217897415161133,
+        0.05806407704949379
+      ],
+      "reference": "real",
+      "prompted": "positive_relations",
+      "sft": "sft_positive_relations",
+      "configuration": "epoch5_with_source"
+    }
+  }
+}
